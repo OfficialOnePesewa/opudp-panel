@@ -34,6 +34,9 @@ case $ARCH in
     *) error "Unsupported architecture: $ARCH" ;;
 esac
 
+# Stop existing ZIVPN service (prevents "Text file busy" on reinstall)
+systemctl stop zivpn 2>/dev/null || true
+
 # Download ZIVPN binary
 ZIVPN_URL="https://github.com/zahidbd2/udp-zivpn/releases/download/udp-zivpn_1.4.9/udp-zivpn-linux-${BIN_ARCH}"
 log "Downloading ZIVPN..."
@@ -63,7 +66,10 @@ EOF
 touch /etc/zivpn/users.db
 chmod 600 /etc/zivpn/users.db
 
-# Firewall rules
+# Firewall rules (idempotent)
+iptables -D INPUT -p udp --dport 5667 -j ACCEPT 2>/dev/null || true
+iptables -D INPUT -p udp --dport 6000:19999 -j ACCEPT 2>/dev/null || true
+iptables -t nat -D PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667 2>/dev/null || true
 iptables -I INPUT -p udp --dport 5667 -j ACCEPT
 iptables -I INPUT -p udp --dport 6000:19999 -j ACCEPT
 iptables -t nat -A PREROUTING -p udp --dport 6000:19999 -j DNAT --to-destination :5667
@@ -90,7 +96,7 @@ EOF
 systemctl daemon-reload
 systemctl enable --now zivpn
 
-# Download panel script
+# Download panel script (overwrite if exists)
 wget -q --show-progress -O /usr/local/bin/opudp \
     "https://raw.githubusercontent.com/OfficialOnePesewa/opudp-panel/main/opudp"
 chmod +x /usr/local/bin/opudp
